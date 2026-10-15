@@ -1,4 +1,5 @@
 // Spielstand: reine Funktionen ohne Browser-Abhängigkeiten, damit sie auch unter Node testbar sind.
+import { SPECIES, STATS } from './pets.js';
 
 export const VERSION = 1;
 
@@ -21,7 +22,7 @@ export function newState(now = Date.now()) {
     createdAt: now,
     updatedAt: now,
     coins: 0,
-    pets: [],          // kommt in Schritt 2
+    pets: [],
     activePet: null,
     inventory: {},     // kommt in Schritt 3
     visits: { total: 0, streak: 0, best: 0, lastDay: null },
@@ -35,12 +36,28 @@ export function migrate(raw) {
   if (typeof raw.version !== 'number' || raw.version > VERSION) return null;
   const base = newState(typeof raw.createdAt === 'number' ? raw.createdAt : Date.now());
   const s = { ...base, ...raw, visits: { ...base.visits, ...(raw.visits || {}) } };
-  if (!Array.isArray(s.pets)) s.pets = [];
+  s.pets = Array.isArray(s.pets) ? s.pets.map(fixPet).filter(Boolean) : [];
+  if (!s.pets.some((p) => p.id === s.activePet)) s.activePet = s.pets.length ? s.pets[0].id : null;
   if (!s.inventory || typeof s.inventory !== 'object') s.inventory = {};
   if (typeof s.coins !== 'number' || !(s.coins >= 0)) s.coins = 0;
   if (typeof s.updatedAt !== 'number') s.updatedAt = s.createdAt;
   s.version = VERSION;
   return s;
+}
+
+// Ein Tier aus gespeicherten Daten prüfen und fehlende Werte ergänzen
+function fixPet(p) {
+  if (!p || typeof p !== 'object' || !SPECIES[p.species] || typeof p.id !== 'string') return null;
+  const stats = {};
+  for (const { key } of STATS) {
+    const v = p.stats && p.stats[key];
+    stats[key] = typeof v === 'number' && v >= 0 && v <= 100 ? v : 50;
+  }
+  return {
+    ...p, stats, name: typeof p.name === 'string' && p.name ? p.name : SPECIES[p.species].names[0],
+    sleeping: !!p.sleeping, tickAt: typeof p.tickAt === 'number' ? p.tickAt : Date.now(),
+    fatigue: p.fatigue && typeof p.fatigue === 'object' ? p.fatigue : {},
+  };
 }
 
 export function parse(text) {

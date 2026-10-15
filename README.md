@@ -9,9 +9,25 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt und ohne eigene Abhängigkeiten.
 ## Stand
 
 1. ✅ Grundgerüst und Spielstand
-2. ⬜ Tiere und Pflege
+2. ✅ Tiere und Pflege
 3. ⬜ Münzen, Shop und Inventar
 4. ⬜ Eigene Unterseite `/haustier` auf der Homepage
+
+## Spielregeln
+
+- **Tiere:** Katze, Hund, Kaninchen, Hamster und Ratte gibt es von Anfang an, je in drei Farben.
+  Besondere Tiere schaltet eine Besuchsserie frei: Fuchs ab 3, Axolotl ab 7, Drache ab 14 Tagen in Folge.
+- **Tierplätze:** Am Anfang ein Tier, weitere Plätze nach 5, 15 und 30 Besuchstagen (höchstens 4 Tiere).
+- **Werte** von 0 bis 100: Liebe, Spaß, Nahrung, Wasser, Ruhe und Erfüllung. Sie sinken mit der Zeit, auch
+  wenn niemand spielt. Erfüllung folgt langsam dem Durchschnitt der anderen Werte. Jede Art hat eigene
+  Bedürfnisse (Hunde wollen mehr Spaß, Hamster mehr Futter …). Ein Tier stirbt nie, es wird nur traurig.
+- **Pflege:** Streicheln (auch durch Streichen mit Maus oder Finger über das Tier), Kuscheln ab 70 Liebe,
+  Füttern, Wasser geben, Spielen (braucht Spielzeug, zum Start gibt es einen Ball), Schlafen legen und
+  Aufwecken. Wer dasselbe oft hintereinander macht, bewirkt immer weniger; das erholt sich mit der Zeit.
+- **Schlaf:** Im Schlaf steigt Ruhe und alles andere sinkt langsamer. Ausgeschlafen wacht das Tier von selbst
+  auf, erschöpft schläft es von selbst ein.
+
+Die Zahlen stehen oben in `src/js/pets.js` und lassen sich dort anpassen.
 
 ## Spielstand
 
@@ -49,6 +65,8 @@ Spielstände im Konto liegen dort nur im Arbeitsspeicher.
 src/index.html      Oberfläche
 src/css/game.css    Windows-98-Look, übernimmt die Farben aus /theme.css der Homepage
 src/js/state.js     Spielstand (reine Funktionen)
+src/js/pets.js      Tierarten, Werte, Zeit und Pflege (reine Funktionen)
+src/js/art.js       Vektorgrafiken der Tiere
 src/js/storage.js   Laden/Speichern für Gäste und Konten
 src/js/main.js      Ablauf und Oberfläche
 dev/server.js       lokaler Testserver
