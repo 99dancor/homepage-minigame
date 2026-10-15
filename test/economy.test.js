@@ -122,3 +122,16 @@ test('Accessoires an- und ablegen, jedes lässt sich an jedem Tier zeichnen', ()
     }
   }
 });
+
+test('Tägliche Fragen: Ja bringt mehr, einmal am Tag, Antworten werden nicht gespeichert', async () => {
+  const { checkIn, checkinDone, CHECKIN_YES, CHECKIN_NO, CHECKIN_JOY } = await import('../src/js/economy.js');
+  const s = game();
+  const joy = s.pets[0].stats.joy;
+  const r = checkIn(s, [true, true, false], T0);
+  assert.equal(r.coins, 2 * CHECKIN_YES + CHECKIN_NO);
+  assert.equal(s.pets[0].stats.joy, joy + 2 * CHECKIN_JOY);
+  assert.ok(checkinDone(s, T0));
+  assert.equal(checkIn(s, [true, true, true], T0 + 1000).ok, false, 'nur einmal am Tag');
+  assert.ok(checkIn(s, [false, false, false], T0 + D).ok, 'am nächsten Tag wieder');
+  assert.doesNotMatch(JSON.stringify(s), /survived|selfcare|wellbeing/);
+});

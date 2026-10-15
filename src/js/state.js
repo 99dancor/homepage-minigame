@@ -34,6 +34,7 @@ export function newState(now = Date.now()) {
     starterGiven: false,
     milestones: {},         // einmalige Belohnungen, z. B. "streak7"
     daily: null,            // Tagesaufgaben und Münzen aus Aktionen des aktuellen Tages
+    checkinDay: null,       // Tag, an dem die Fragen zum Wohlbefinden zuletzt beantwortet wurden
   };
 }
 

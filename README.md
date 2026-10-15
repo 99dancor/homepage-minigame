@@ -34,6 +34,19 @@ Grundlage ist das Konzept in der Projektablage (`haustier/konzept.md`), als „M
 - **Lieblingssachen** (❤️) wirken 50 % stärker, z. B. Thunfisch für Katzen oder der Ball für Hunde.
 - **Start:** ein Ball und 5 × Trockenfutter.
 
+## Wie war dein Tag?
+
+Einmal am Tag drei Ja/Nein-Fragen zum eigenen Wohlbefinden: „Hast du den Tag heute überlebt?“, „Hast du etwas
+Gutes für dich getan?“, „Geht es dir gut?“. Ja bringt 10 Münzen und 5 Erfüllung für alle Tiere, Nein 8 Münzen.
+Bei „Geht es dir gut? – Nein“ schlägt das Spiel einen Forumsbeitrag vor (`forumUrl`, Standard `/forum/new`) und
+nennt die TelefonSeelsorge. Gespeichert wird nur der Tag der Antwort, nicht die Antworten.
+
+## Changelog
+
+`src/changelog.md` im selben Format wie das Changelog der Homepage (`## TT.MM.JJJJ – Titel`, darunter `- `-Punkte).
+Das Spiel zeigt es unter 📜 an und markiert neue Einträge mit einem roten Punkt. Bei jeder Änderung oben einen
+Eintrag ergänzen.
+
 ## Münzen und Shop
 
 - **Pflege** bringt 1–5 Münzen je Aktion, höchstens 150 am Tag.
@@ -67,7 +80,7 @@ Die Zahlen stehen oben in `src/js/pets.js`, `src/js/economy.js` und `src/js/item
 Die Adressen lassen sich von der einbettenden Seite vorgeben:
 
 ```html
-<script>window.HAUSTIER_CONFIG = { savesUrl: '/api/saves/haustier', loginUrl: '/login', registerUrl: '/register' };</script>
+<script>window.HAUSTIER_CONFIG = { savesUrl: '/api/saves/haustier', loginUrl: '/login', registerUrl: '/register', forumUrl: '/forum/new' };</script>
 ```
 
 ## Lokal ausprobieren
@@ -84,6 +97,7 @@ Spielstände im Konto liegen dort nur im Arbeitsspeicher.
 
 ```
 src/index.html      Oberfläche
+src/changelog.md    Neuigkeiten für Spieler
 src/css/game.css    Windows-98-Look, übernimmt die Farben aus /theme.css der Homepage
 src/js/state.js     Spielstand (reine Funktionen)
 src/js/pets.js      Tierarten, Werte, Zeit und Pflege (reine Funktionen)

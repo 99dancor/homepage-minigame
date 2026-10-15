@@ -203,3 +203,30 @@ export function setRoom(state, id) {
   state.room = id;
   return true;
 }
+
+// ---------- Tägliche Fragen zum eigenen Wohlbefinden ----------
+// Einmal am Tag drei Ja/Nein-Fragen. Ja bringt Münzen und Erfüllung für alle Tiere, Nein etwas weniger Münzen.
+// Gespeichert wird nur, DASS geantwortet wurde, nicht die Antworten selbst.
+export const CHECKIN_QUESTIONS = [
+  { id: 'survived', text: 'Hast du den Tag heute überlebt?' },
+  { id: 'selfcare', text: 'Hast du etwas Gutes für dich getan?' },
+  { id: 'wellbeing', text: 'Geht es dir gut?' },
+];
+export const CHECKIN_YES = 10;
+export const CHECKIN_NO = 8;
+export const CHECKIN_JOY = 5;
+
+export const checkinDone = (state, now = Date.now()) => state.checkinDay === dayKey(now);
+
+// answers: Liste von true/false in der Reihenfolge der Fragen. Gibt { ok, coins, joy } zurück.
+export function checkIn(state, answers, now = Date.now()) {
+  if (checkinDone(state, now)) return { ok: false, coins: 0, joy: 0 };
+  if (!Array.isArray(answers) || answers.length !== CHECKIN_QUESTIONS.length) return { ok: false, coins: 0, joy: 0 };
+  const yes = answers.filter(Boolean).length;
+  const coins = yes * CHECKIN_YES + (answers.length - yes) * CHECKIN_NO;
+  const joy = yes * CHECKIN_JOY;
+  for (const p of state.pets) p.stats.joy = Math.min(100, p.stats.joy + joy);
+  addCoins(state, coins);
+  state.checkinDay = dayKey(now);
+  return { ok: true, coins, joy };
+}

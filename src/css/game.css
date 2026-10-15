@@ -156,6 +156,17 @@ a.btn, a.btn:visited { color: var(--text); }
 .sparkle { animation: sparkle 1s ease-in-out 3; transform-origin: center; }
 @keyframes sparkle { 50% { opacity: .2; } }
 
+/* Tägliche Fragen und Neuigkeiten */
+.checkin-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px;
+  margin: 0 0 8px; padding: 6px 8px; background: var(--note); color: #000; border: 1px solid #000; }
+.question { font-size: 16px; font-weight: bold; margin: 4px 0 10px; }
+.task-body small { opacity: .8; }
+.dot { display: inline-block; width: 8px; height: 8px; margin-left: 2px; border-radius: 50%; background: #e02020; vertical-align: top; }
+.changelog { max-height: 60vh; overflow: auto; }
+.changelog h3 { margin: 10px 0 4px; }
+.changelog ul { margin: 0; padding-left: 20px; }
+#dlg a.btn, #dlg a.btn:visited { color: var(--text); }
+
 /* Adoption */
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .card { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px; min-width: 0; }

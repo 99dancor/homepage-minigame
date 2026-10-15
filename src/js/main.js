@@ -10,14 +10,17 @@ import { ITEMS, ITEM_LIST, CATEGORIES, usableBy, isFav, isDurable } from './item
 import {
   ensureDaily, track, taskProgress, TASK_INFO, actionCoins, addCoins, loginBonus, streakMilestones, levelReward,
   accountBonus, available, relevant, dealOfDay, priceOf, canBuy, buy, wear, setRoom, LOGIN_BONUS, DAILY_CAP, ACCOUNT_BONUS,
+  CHECKIN_QUESTIONS, CHECKIN_YES, CHECKIN_NO, CHECKIN_JOY, checkIn, checkinDone,
 } from './economy.js';
 import { petSvg, roomSvg } from './art.js';
 
-// Die Homepage kann Adressen vorgeben: <script>window.HAUSTIER_CONFIG = { savesUrl, loginUrl, registerUrl }</script>
+// Die Homepage kann Adressen vorgeben: <script>window.HAUSTIER_CONFIG = { savesUrl, loginUrl, registerUrl, forumUrl }</script>
 const config = {
   savesUrl: '/api/saves/haustier',
   loginUrl: '/login',
   registerUrl: '/register',
+  forumUrl: '/forum/new',
+  changelogUrl: 'changelog.md',
   ...(window.HAUSTIER_CONFIG || {}),
 };
 
@@ -141,7 +144,9 @@ function roomHtml() {
   const sp = SPECIES[pet.species];
   const say = bubble && bubble.until > Date.now() ? bubble.text : m.text;
   const lp = levelProgress(pet);
-  return `${petTabs()}
+  const ask = checkinDone(state) ? '' : `<div class="checkin-banner"><span>💬 <b>Wie war dein Tag?</b> Drei kurze Fragen, bis zu ${3 * CHECKIN_YES} Münzen und Erfüllung für ${esc(pet.name)}.</span>
+      <button type="button" class="small" data-checkin>Fragen beantworten</button></div>`;
+  return `${petTabs()}${ask}
     <div class="room-layout">
       <div class="room${pet.sleeping ? ' night' : ''}">
         ${roomSvg(state.room)}
@@ -276,7 +281,11 @@ function tasksHtml() {
   const cycle = ((Math.max(1, state.visits.streak) - 1) % 7) + 1;
   const days = LOGIN_BONUS.map((c, i) => `<div class="bonus-day${i + 1 < cycle ? ' past' : ''}${i + 1 === cycle ? ' today' : ''}">
       <small>Tag ${i + 1}</small><b>${c}</b>${i === 6 ? '<small>+ 🎁</small>' : ''}</div>`).join('');
-  return `<h1>📋 Tagesaufgaben</h1><div class="tasks">${tasks || '<p>Heute keine Aufgaben.</p>'}</div>
+  const ci = checkinDone(state)
+    ? '<div class="task done"><span class="task-check">✅</span><div class="task-body"><b>Fragen zu deinem Tag beantwortet</b><small>Morgen gibt es neue.</small></div></div>'
+    : `<div class="task"><span class="task-check">💬</span><div class="task-body"><b>Wie war dein Tag?</b><small>Drei kurze Fragen über dich</small></div>
+       <button type="button" class="small" data-checkin>Beantworten</button></div>`;
+  return `<h1>📋 Tagesaufgaben</h1><div class="tasks">${ci}${tasks || '<p>Heute keine Aufgaben.</p>'}</div>
     <p class="muted">Morgen gibt es neue Aufgaben. Münzen aus Pflege heute: ${d.actionCoins} von ${DAILY_CAP}.</p>
     <fieldset class="groupbox"><legend>🔥 Login-Bonus (${state.visits.streak} ${state.visits.streak === 1 ? 'Tag' : 'Tage'} in Folge)</legend>
       <div class="bonus">${days}</div><small>Komm jeden Tag vorbei. Nach Tag 7 beginnt die Woche von vorn, die Serie zählt weiter.</small></fieldset>
@@ -395,6 +404,74 @@ async function rename() {
   render();
 }
 
+// ---------- Fragen zum eigenen Wohlbefinden ----------
+async function runCheckin() {
+  if (checkinDone(state)) return;
+  const pet = activePet(state);
+  const answers = [];
+  for (const [i, q] of CHECKIN_QUESTIONS.entries()) {
+    const r = await dialog(`Wie war dein Tag? (${i + 1}/3)`, `<p class="question">${q.text}</p>
+      <p><small>Ja bringt ${CHECKIN_YES} Münzen und ${CHECKIN_JOY} Erfüllung für deine Tiere, Nein ${CHECKIN_NO} Münzen. Ehrlich antworten lohnt sich immer.</small></p>`,
+      [{ label: 'Ja', value: 'yes' }, { label: 'Nein', value: 'no' }, { label: 'Später', value: 'later' }]);
+    if (r === 'later') return;
+    answers.push(r === 'yes');
+  }
+  const res = checkIn(state, answers);
+  if (!res.ok) return;
+  store.save(state);
+  const feelsBad = answers[2] === false;
+  bubble = pet ? { text: feelsBad ? `${pet.name} kuschelt sich ganz nah an dich.` : `${pet.name} freut sich mit dir!`, until: Date.now() + 6000 } : null;
+  render();
+  let html = `<p>Danke fürs Beantworten! Du bekommst ${coins(res.coins)}${res.joy ? ` und deine Tiere ${res.joy} Erfüllung` : ''}.</p>`;
+  if (!feelsBad) { ok('Danke!', html); return; }
+  html += `<p>Schön, dass du ehrlich bist. Wenn du magst, schreib darüber im <b>Forum</b>. Dort lesen andere mit, die dir zuhören
+    und vielleicht Ähnliches kennen.</p>
+    <p><a class="btn" href="${esc(config.forumUrl)}" target="_top">✍️ Beitrag im Forum schreiben</a></p>
+    <p><small>Wenn es dir richtig schlecht geht, musst du da nicht allein durch: Die <b>TelefonSeelsorge</b> ist rund um die Uhr
+    kostenlos und anonym erreichbar unter <b>0800 111 0 111</b> oder <b>0800 111 0 222</b> und auf
+    <a href="https://online.telefonseelsorge.de" target="_blank" rel="noopener">online.telefonseelsorge.de</a>.
+    In einem Notfall wähle <b>112</b>.</small></p>`;
+  ok('Danke, dass du es sagst', html);
+}
+
+// ---------- Neuigkeiten ----------
+// Kleiner Markdown-Ausschnitt: ## Überschrift, - Liste, **fett**
+function changelogHtml(md) {
+  const inline = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  let html = '', list = false;
+  for (const line of md.split('\n')) {
+    if (line.startsWith('- ')) { if (!list) { html += '<ul>'; list = true; } html += `<li>${inline(line.slice(2))}</li>`; continue; }
+    if (list) { html += '</ul>'; list = false; }
+    if (line.startsWith('## ')) html += `<h3>${inline(line.slice(3))}</h3>`;
+    else if (line.trim() && !line.startsWith('# ')) html += `<p>${inline(line)}</p>`;
+  }
+  return html + (list ? '</ul>' : '');
+}
+
+let changelog = null;
+async function loadChangelog() {
+  if (changelog) return changelog;
+  try {
+    const r = await fetch(config.changelogUrl, { cache: 'no-cache' });
+    const md = r.ok ? await r.text() : '';
+    const latest = (md.match(/^## (.+)$/m) || [])[1] || '';
+    changelog = { html: changelogHtml(md) || '<p>Noch keine Einträge.</p>', latest };
+  } catch { changelog = { html: '<p>Die Neuigkeiten konnten nicht geladen werden.</p>', latest: '' }; }
+  return changelog;
+}
+
+async function markNews() {
+  const c = await loadChangelog();
+  $('news-dot').hidden = !c.latest || store.prefs().newsSeen === c.latest;
+}
+
+async function showNews() {
+  const c = await loadChangelog();
+  store.setPrefs({ newsSeen: c.latest });
+  $('news-dot').hidden = true;
+  ok('📜 Neuigkeiten', `<div class="changelog">${c.html}</div>`);
+}
+
 function wire() {
   $('login-link').href = config.loginUrl;
   $('register-link').href = config.registerUrl;
@@ -425,6 +502,7 @@ function wire() {
     if (t.id === 'adopt-back') { picked = null; return render(); }
     if (t.id === 'name-dice') { $('pet-name').value = pick(SPECIES[picked].names); return; }
     if ('rename' in d) return rename();
+    if ('checkin' in d) return runCheckin();
   });
   screen.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -456,6 +534,7 @@ function wire() {
   screen.addEventListener('pointerup', end);
   screen.addEventListener('pointercancel', end);
 
+  document.querySelector('[data-open=news]').addEventListener('click', showNews);
   document.querySelector('[data-open=help]').addEventListener('click', () => ok('Hilfe',
     `<p>Kümmere dich jeden Tag um dein Haustier. Die Werte sinken mit der Zeit, auch wenn du nicht da bist,
      aber nie unter 10. Krank wird dein Tier nicht, es wird nur traurig, wenn du es vernachlässigst.</p>
@@ -465,7 +544,8 @@ function wire() {
      <li>Pflege bringt <b>Münzen</b> (bis ${DAILY_CAP} am Tag), dazu kommen Login-Bonus und Tagesaufgaben.</li>
      <li>Im <b>Shop</b> gibt es Futter, Spielzeug, Pflegesachen, Accessoires und Räume. Lieblingsfutter und
        Lieblingsspielzeug (❤️) wirken 50 % stärker.</li>
-     <li>Zu oft hintereinander dasselbe wirkt schwächer. Lieber öfter am Tag vorbeischauen.</li></ul>
+     <li>Zu oft hintereinander dasselbe wirkt schwächer. Lieber öfter am Tag vorbeischauen.</li>
+     <li>Einmal am Tag gibt es drei kurze Fragen zu <b>deinem</b> Tag. Gespeichert wird nur, dass du geantwortet hast, nicht was.</li></ul>
      <p>${store.mode === 'account'
        ? 'Dein Spielstand wird automatisch in deinem Konto gespeichert und ist auf allen Geräten verfügbar.'
        : 'Als Gast wird dein Spielstand nur in diesem Browser gespeichert. Mit einem Konto ist er dauerhaft gesichert und auf allen Geräten verfügbar.'}</p>`));
@@ -548,6 +628,7 @@ async function start() {
 
   msgs.push(...claimAccountBonus(), ...arrive());
   render();
+  markNews();
   await showAll(msgs);
   render();
 
