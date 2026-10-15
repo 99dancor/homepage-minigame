@@ -2,6 +2,7 @@
 // Ohren, Schwanz und Besonderheiten kommen je Tierart dazu.
 //   petSvg(species, colorId, face)   face: 'happy' | 'ok' | 'sad' | 'sleep'
 import { SPECIES } from './pets.js';
+import { ITEMS } from './items.js';
 
 const LINE = '#2a2a2a';
 const rot = (deg, x, y) => `transform="rotate(${deg} ${x} ${y})"`;
@@ -149,13 +150,139 @@ const PARTS = {
   },
 };
 
-export function petSvg(speciesId, colorId, face = 'ok', { title = '' } = {}) {
+// Ankerpunkte je Art für Accessoires: Kopf (oben, Breite), Augen (Höhe, Abstand), Hals (Höhe, Breite), Körper
+const ANCHOR = {
+  cat: { top: 44, w: 84, eyeY: 82, dx: 16, neckY: 123, neckW: 62, body: [145, 48, 40] },
+  dog: { top: 44, w: 84, eyeY: 80, dx: 16, neckY: 123, neckW: 62, body: [145, 48, 40] },
+  rabbit: { top: 49, w: 80, eyeY: 86, dx: 16, neckY: 125, neckW: 58, body: [145, 48, 40] },
+  hamster: { top: 67, w: 92, eyeY: 100, dx: 18, neckY: 142, neckW: 92, body: [128, 64, 62], sweater: [162, 56, 26] },
+  rat: { top: 53, w: 76, eyeY: 84, dx: 15, neckY: 125, neckW: 56, body: [148, 44, 38] },
+  fox: { top: 45, w: 84, eyeY: 84, dx: 16, neckY: 125, neckW: 62, body: [145, 48, 40] },
+  axolotl: { top: 53, w: 100, eyeY: 88, dx: 26, neckY: 131, neckW: 64, body: [150, 44, 36] },
+  dragon: { top: 45, w: 84, eyeY: 82, dx: 16, neckY: 123, neckW: 62, body: [145, 48, 40] },
+};
+
+// Kopfschmuck in einem Raster: Mitte oben am Kopf = (0,0), Kopfbreite 84
+const HEAD = {
+  acc_beanie: '<path d="M-40,14 Q-42,-26 0,-28 Q42,-26 40,14 Z" fill="#3a6fd8"/><rect x="-43" y="4" width="86" height="13" rx="6" fill="#2a55b0"/><circle cx="0" cy="-30" r="8" fill="#fff"/>',
+  acc_partyhat: '<path d="M-20,8 L0,-50 L20,8 Z" fill="#ff6fae"/><path d="M-13,-12 L13,-12 M-7,-30 L7,-30" stroke="#fff" stroke-width="4"/><circle cx="0" cy="-52" r="6" fill="#ffd84a"/>',
+  acc_crown: '<path d="M-26,8 L-26,-20 L-13,-6 L0,-26 L13,-6 L26,-20 L26,8 Z" fill="#f4c430"/><circle cx="0" cy="-2" r="4" fill="#e03050" stroke-width="1.5"/><circle cx="-15" cy="1" r="3" fill="#3080e0" stroke-width="1.5"/><circle cx="15" cy="1" r="3" fill="#3080e0" stroke-width="1.5"/>',
+  acc_santa: '<path d="M-38,8 Q-14,-50 36,-32 L32,-22 Q2,-30 38,8 Z" fill="#d82828"/><rect x="-43" y="2" width="86" height="13" rx="6" fill="#fff"/><circle cx="35" cy="-29" r="7" fill="#fff"/>',
+  acc_bow: '<g transform="translate(22 8)"><path d="M0,0 L-15,-11 L-15,11 Z" fill="#ff5c8a"/><path d="M0,0 L15,-11 L15,11 Z" fill="#ff5c8a"/><circle r="4.5" fill="#e0306a"/></g>',
+  acc_flowers: [-150, -125, -100, -80, -55, -30].map((deg, i) => {
+    const a = (deg * Math.PI) / 180, x = 42 * Math.cos(a), y = 42 + 42 * Math.sin(a);
+    const c = ['#ff8fb8', '#fff27a', '#ffffff'][i % 3];
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7" fill="${c}" stroke-width="1.5"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="#f0a020" stroke="none"/>`;
+  }).join(''),
+};
+
+// Halsschmuck: Mitte vorne am Hals = (0,0), Halsbreite 60
+const NECK = {
+  collar: (c) => `<rect x="-30" y="-5" width="60" height="10" rx="5" fill="${c}"/><circle cx="0" cy="9" r="4.5" fill="#f4c430" stroke-width="1.5"/>`,
+  acc_bell: '<rect x="-30" y="-5" width="60" height="10" rx="5" fill="#d03030"/><circle cx="0" cy="10" r="7" fill="#f4c430"/><path d="M-3,13 h6" stroke-width="1.5"/>',
+  acc_bowtie: '<path d="M0,0 L-18,-10 L-18,10 Z" fill="#c02040"/><path d="M0,0 L18,-10 L18,10 Z" fill="#c02040"/><rect x="-4" y="-5" width="8" height="10" rx="2" fill="#901030"/>',
+  acc_scarf: '<path d="M-14,0 L14,0 L0,28 Z" fill="#e8a020"/><rect x="-32" y="-6" width="64" height="11" rx="5" fill="#f0b030"/><path d="M-26,-1 h52" stroke="#c07010" stroke-width="2"/>',
+  acc_homepage: '<path d="M-15,0 L15,0 L0,30 Z" fill="#008080"/><rect x="-32" y="-6" width="64" height="11" rx="5" fill="#008080"/><rect x="-6" y="4" width="12" height="10" fill="#fff" stroke-width="1.2"/><rect x="-6" y="4" width="12" height="3" fill="#000080" stroke="none"/>',
+};
+
+function headAcc(id, a) {
+  if (id === 'acc_sunglasses') {
+    const k = a.dx / 16;
+    return `<g transform="translate(100 ${a.eyeY}) scale(${k})"><rect x="-27" y="-8" width="22" height="15" rx="5" fill="#111"/><rect x="5" y="-8" width="22" height="15" rx="5" fill="#111"/>
+      <path d="M-5,-3 Q0,-7 5,-3" fill="none" stroke-width="2.5"/><path d="M-22,-4 l6,-2 M10,-4 l6,-2" stroke="#fff" stroke-width="2" opacity=".6"/></g>`;
+  }
+  return HEAD[id] ? `<g transform="translate(100 ${a.top}) scale(${(a.w / 84).toFixed(3)})">${HEAD[id]}</g>` : '';
+}
+
+function neckAcc(id, a) {
+  const shape = id.startsWith('acc_collar') ? NECK.collar(ITEMS[id].color) : NECK[id];
+  return shape ? `<g transform="translate(100 ${a.neckY}) scale(${(a.neckW / 60).toFixed(3)})">${shape}</g>` : '';
+}
+
+function backAcc(id, a, layer) {
+  const [cy, rx, ry] = a.body;
+  if (id === 'acc_sweater' && layer === 'over') {
+    const [sy, sx, sr] = a.sweater || [cy - 4, rx * 0.97, ry * 0.8];
+    return `<ellipse cx="100" cy="${sy}" rx="${sx}" ry="${sr}" fill="#c84040"/>
+      <path d="M${100 - sx * 0.82},${sy + 8} H${100 + sx * 0.82} M${100 - sx * 0.88},${sy - 6} H${100 + sx * 0.88}" stroke="#f0d0d0" stroke-width="4" opacity=".8"/>`;
+  }
+  if (id === 'acc_cape' && layer === 'behind') {
+    return `<path d="M${100 - rx * 0.7},${a.neckY} Q${100 - rx * 1.4},${cy + ry} ${100 - rx * 1.25},${cy + ry + 4} L${100 + rx * 1.25},${cy + ry + 4} Q${100 + rx * 1.4},${cy + ry} ${100 + rx * 0.7},${a.neckY} Z" fill="#8030c0"/>`;
+  }
+  if (id === 'acc_wings' && layer === 'behind') {
+    const wing = `<path d="M${100 - rx * 0.6},${cy - ry * 0.4} C${100 - rx * 2},${cy - ry * 1.6} ${100 - rx * 2.1},${cy + ry * 0.2} ${100 - rx * 0.7},${cy + ry * 0.3} Z" fill="#fff"/>
+      <path d="M${100 - rx * 1.2},${cy - ry * 0.5} q-10,10 -6,24 M${100 - rx * 1.55},${cy - ry * 0.6} q-8,12 -4,26" fill="none" stroke="#a8c8f0" stroke-width="2"/>`;
+    return both(wing);
+  }
+  return '';
+}
+
+export function petSvg(speciesId, colorId, face = 'ok', { title = '', acc = {}, shine = false } = {}) {
   const sp = SPECIES[speciesId];
   const c = sp.colors.find((x) => x.id === colorId) || sp.colors[0];
   const p = PARTS[speciesId](c, face);
+  const a = ANCHOR[speciesId];
+  const back = acc.back ? backAcc(acc.back, a, 'behind') : '';
+  const over = acc.back ? backAcc(acc.back, a, 'over') : '';
+  const sparkle = shine ? '<g class="sparkle" stroke="none" fill="#fff8b0"><path d="M40,60 l4,10 l10,4 l-10,4 l-4,10 l-4,-10 l-10,-4 l10,-4z"/><path d="M160,120 l3,7 l7,3 l-7,3 l-3,7 l-3,-7 l-7,-3 l7,-3z"/><path d="M150,40 l2,5 l5,2 l-5,2 l-2,5 l-2,-5 l-5,-2 l5,-2z"/></g>' : '';
   return `<svg class="pet-svg species-${speciesId} face-${face}" viewBox="0 0 200 200" role="img" aria-label="${title || sp.name}" xmlns="http://www.w3.org/2000/svg">
     <ellipse cx="100" cy="190" rx="58" ry="7" fill="rgba(0,0,0,.15)"/>
     <g stroke="${LINE}" stroke-width="2.5" stroke-linejoin="round">
-      ${p.back}${p.ears}${p.body}${p.head}${p.front || ''}<g class="face" stroke="${c.faceLine || LINE}">${p.face}${tear(face, 82)}</g>
-    </g>${zzz(face)}</svg>`;
+      ${p.back}${back}${p.ears}${p.body}${over}${p.head}${p.front || ''}<g class="face" stroke="${c.faceLine || LINE}">${p.face}${tear(face, 82)}</g>
+      ${acc.neck ? neckAcc(acc.neck, a) : ''}${acc.head ? headAcc(acc.head, a) : ''}
+    </g>${sparkle}${zzz(face)}</svg>`;
+}
+
+// Kleines Bild eines Accessoires für Shop und Inventar
+export function accSvg(id) {
+  const item = ITEMS[id];
+  const a = { top: 60, w: 84, eyeY: 100, dx: 16, neckY: 96, neckW: 60, body: [120, 48, 40] };
+  let inner;
+  if (item.slot === 'head') inner = id === 'acc_sunglasses' ? headAcc(id, a) : `<g transform="translate(0 0)">${headAcc(id, a)}</g>`;
+  else if (item.slot === 'neck') inner = neckAcc(id, a);
+  else inner = backAcc(id, a, 'behind') + backAcc(id, a, 'over');
+  const vb = item.slot === 'head' ? '40 0 120 110' : item.slot === 'neck' ? '55 70 90 70' : '0 60 200 120';
+  return `<svg class="acc-svg" viewBox="${vb}" xmlns="http://www.w3.org/2000/svg"><g stroke="${LINE}" stroke-width="2.5" stroke-linejoin="round">${inner}</g></svg>`;
+}
+
+// ---------- Räume ----------
+// Hintergründe in einem 400 × 300-Raster, Boden ab y = 186
+const ROOMS = {
+  room_living: `<rect width="400" height="186" fill="#fdf3dc"/><rect y="186" width="400" height="114" fill="#d9b98a"/>
+    <path d="M0,215 H400 M0,250 H400 M0,285 H400" stroke="#c4a274" stroke-width="2"/>
+    <rect x="30" y="34" width="80" height="70" fill="#bfe6ff" stroke="#8a6a40" stroke-width="6"/><path d="M70,34 V104 M30,69 H110" stroke="#8a6a40" stroke-width="4"/>
+    <rect x="290" y="46" width="70" height="50" fill="#f6d06a" stroke="#8a6a40" stroke-width="5"/><circle cx="325" cy="71" r="12" fill="#e07050"/>
+    <ellipse cx="200" cy="262" rx="130" ry="24" fill="#c0504d" opacity=".55"/>`,
+  room_garden: `<rect width="400" height="186" fill="#bfe6ff"/><circle cx="340" cy="50" r="26" fill="#ffd84a"/>
+    <g fill="#fff"><ellipse cx="90" cy="50" rx="34" ry="14"/><ellipse cx="115" cy="42" rx="22" ry="14"/><ellipse cx="230" cy="76" rx="26" ry="10"/></g>
+    <g fill="#fff" stroke="#c8c8c8" stroke-width="2">${[20, 70, 120, 270, 320, 370].map((x) => `<path d="M${x - 10},186 V140 L${x},128 L${x + 10},140 V186 Z"/>`).join('')}</g>
+    <rect y="150" width="400" height="8" fill="#fff"/><rect y="186" width="400" height="114" fill="#7cc65a"/>
+    <g>${[[40, 230, '#ff7aa8'], [90, 270, '#ffd84a'], [330, 240, '#ff7aa8'], [365, 280, '#fff']].map(([x, y, c]) => `<circle cx="${x}" cy="${y}" r="7" fill="${c}"/><circle cx="${x}" cy="${y}" r="2.5" fill="#f0a020"/>`).join('')}</g>`,
+  room_kids: `<rect width="400" height="186" fill="#e8f0ff"/>
+    <g fill="#ffd84a">${[[50, 40], [140, 90], [260, 30], [350, 110], [210, 140]].map(([x, y]) => `<path d="M${x},${y - 9} l3,6 l7,1 l-5,5 l1,7 l-6,-3 l-6,3 l1,-7 l-5,-5 l7,-1z"/>`).join('')}</g>
+    <rect y="186" width="400" height="114" fill="#f2c6d8"/>
+    <g stroke="#2a2a2a" stroke-width="2"><rect x="320" y="226" width="30" height="30" fill="#e05050"/><rect x="350" y="226" width="30" height="30" fill="#4080e0"/><rect x="335" y="196" width="30" height="30" fill="#40b060"/></g>
+    <circle cx="50" cy="262" r="16" fill="#ff9f40" stroke="#2a2a2a" stroke-width="2"/>`,
+  room_beach: `<defs><linearGradient id="sky" x2="0" y2="1"><stop offset="0" stop-color="#7cc8ff"/><stop offset="1" stop-color="#d8f0ff"/></linearGradient></defs>
+    <rect width="400" height="150" fill="url(#sky)"/><circle cx="70" cy="56" r="24" fill="#ffd84a"/>
+    <rect y="140" width="400" height="48" fill="#3fa7d6"/><path d="M0,156 q20,-8 40,0 t40,0 t40,0 t40,0 t40,0 t40,0 t40,0 t40,0 t40,0 t40,0" fill="none" stroke="#bfe8ff" stroke-width="3"/>
+    <rect y="186" width="400" height="114" fill="#f3dca0"/>
+    <path d="M330,186 V100" stroke="#8a6a40" stroke-width="5"/><path d="M280,110 Q330,60 380,110 Z" fill="#ff6060" stroke="#2a2a2a" stroke-width="2"/>
+    <path d="M40,270 l10,-6 l10,6 l-4,10 h-12z" fill="#ff9f80" stroke="#2a2a2a" stroke-width="2"/>`,
+  room_retro: `<rect width="400" height="186" fill="#008080"/>
+    <g font-family="Tahoma, sans-serif" font-size="11" fill="#fff" text-anchor="middle">
+      ${[[50, 46, '💻', 'Arbeitsplatz'], [50, 106, '🗑️', 'Papierkorb'], [130, 46, '📁', 'Spiele']].map(([x, y, i, t]) => `<text x="${x}" y="${y + 18}" font-size="24">${i}</text><text x="${x}" y="${y + 36}">${t}</text>`).join('')}</g>
+    <rect y="186" width="400" height="114" fill="#a0a0a0"/><rect y="186" width="400" height="10" fill="#c0c0c0"/>
+    <g stroke="#2a2a2a" stroke-width="2"><rect x="290" y="96" width="90" height="74" rx="4" fill="#d8d0b8"/><rect x="300" y="106" width="70" height="50" fill="#000080"/>
+      <rect x="315" y="170" width="40" height="10" fill="#c8c0a8"/><rect x="280" y="180" width="110" height="10" fill="#d8d0b8"/></g>
+    <text x="335" y="136" font-family="Courier New, monospace" font-size="10" fill="#fff" text-anchor="middle">C:\&gt;_</text>`,
+  room_cave: `<rect width="400" height="186" fill="#3a2e34"/>
+    <g fill="#55424a">${[30, 90, 150, 240, 300, 370].map((x, i) => `<path d="M${x - 18},0 L${x},${40 + (i % 3) * 18} L${x + 18},0 Z"/>`).join('')}</g>
+    <g fill="#7ad8ff" opacity=".8"><path d="M60,140 l8,-16 l8,16 l-8,8z"/><path d="M330,120 l6,-12 l6,12 l-6,6z"/></g>
+    <rect y="186" width="400" height="114" fill="#5a4038"/><ellipse cx="200" cy="300" rx="240" ry="40" fill="#ff7a30" opacity=".35"/>
+    <g fill="#f4c430" stroke="#2a2a2a" stroke-width="2"><ellipse cx="330" cy="250" rx="30" ry="10"/><circle cx="318" cy="244" r="6"/><circle cx="334" cy="240" r="6"/><circle cx="346" cy="246" r="6"/></g>`,
+};
+
+export function roomSvg(id) {
+  return `<svg class="room-bg" viewBox="0 0 400 300" preserveAspectRatio="xMidYMax slice" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">${ROOMS[id] || ROOMS.room_living}</svg>`;
 }

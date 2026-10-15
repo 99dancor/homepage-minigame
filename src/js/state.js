@@ -1,5 +1,6 @@
 // Spielstand: reine Funktionen ohne Browser-Abhängigkeiten, damit sie auch unter Node testbar sind.
-import { SPECIES, STATS } from './pets.js';
+import { SPECIES, STATS, starterInventory } from './pets.js';
+import { ITEMS } from './items.js';
 
 export const VERSION = 1;
 
@@ -24,8 +25,15 @@ export function newState(now = Date.now()) {
     coins: 0,
     pets: [],
     activePet: null,
-    inventory: {},     // kommt in Schritt 3
+    inventory: {},          // Gegenstand -> Anzahl (siehe items.js)
+    room: 'room_living',
     visits: { total: 0, streak: 0, best: 0, lastDay: null },
+    earned: 0,              // insgesamt verdiente Münzen
+    extraSlots: 0,          // gekaufte Tierplätze
+    accountBonus: false,    // Konto-Geschenk schon erhalten
+    starterGiven: false,
+    milestones: {},         // einmalige Belohnungen, z. B. "streak7"
+    daily: null,            // Tagesaufgaben und Münzen aus Aktionen des aktuellen Tages
   };
 }
 
@@ -41,6 +49,10 @@ export function migrate(raw) {
   if (!s.inventory || typeof s.inventory !== 'object') s.inventory = {};
   if (typeof s.coins !== 'number' || !(s.coins >= 0)) s.coins = 0;
   if (typeof s.updatedAt !== 'number') s.updatedAt = s.createdAt;
+  if (!s.milestones || typeof s.milestones !== 'object') s.milestones = {};
+  if (!ITEMS[s.room]) s.room = 'room_living';
+  // Spielstände aus der Zeit vor dem Shop bekommen die Startausstattung nachgereicht
+  if (s.pets.length && !s.starterGiven) starterInventory(s);
   s.version = VERSION;
   return s;
 }
@@ -57,6 +69,9 @@ function fixPet(p) {
     ...p, stats, name: typeof p.name === 'string' && p.name ? p.name : SPECIES[p.species].names[0],
     sleeping: !!p.sleeping, tickAt: typeof p.tickAt === 'number' ? p.tickAt : Date.now(),
     fatigue: p.fatigue && typeof p.fatigue === 'object' ? p.fatigue : {},
+    cooldowns: p.cooldowns && typeof p.cooldowns === 'object' ? p.cooldowns : {},
+    acc: p.acc && typeof p.acc === 'object' ? p.acc : {},
+    xp: typeof p.xp === 'number' && p.xp >= 0 ? p.xp : 0,
   };
 }
 
@@ -71,7 +86,7 @@ export function serialize(state) {
 
 // Ein Spielstand ohne jeden Fortschritt muss beim Anmelden nicht nachgefragt werden
 export function isEmpty(state) {
-  return !state || (state.pets.length === 0 && state.coins === 0 && Object.keys(state.inventory).length === 0);
+  return !state || (state.pets.length === 0 && state.coins === 0);
 }
 
 // Täglichen Besuch zählen. Gibt zurück, ob heute der erste Besuch ist.

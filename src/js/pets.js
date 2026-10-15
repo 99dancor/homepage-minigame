@@ -1,5 +1,6 @@
 // Tiere, Statuswerte und Pflege: reine Funktionen, damit sie unter Node testbar sind.
 // Alle Werte laufen von 0 bis 100. Die Zeit läuft auch weiter, während niemand spielt.
+import { ITEMS, usableBy, isFav, owned } from './items.js';
 
 export const STATS = [
   { key: 'love', label: 'Liebe', icon: '❤️' },
@@ -91,9 +92,29 @@ export const SPECIES = {
   },
 };
 
-export const MAX_PETS = 4;
-// Weitere Tierplätze nach so vielen Besuchstagen
-const SLOT_DAYS = [5, 15, 30];
+// ---------- Tierplätze und Zuneigungsstufen ----------
+// Platz 2: ein Tier auf Zuneigungsstufe 5. Platz 3: im Shop für Münzen.
+export const MAX_PETS = 3;
+export const SLOT_LEVEL = 5;
+
+// Gesamte Erfahrung, ab der eine Stufe erreicht ist (Stufe 1 bis 10). Sie sinkt nie.
+export const LEVEL_XP = [0, 30, 80, 150, 250, 380, 540, 730, 950, 1200];
+const ACTION_XP = { pet: 2, cuddle: 4, feed: 2, water: 1, play: 3, sleep: 1, brush: 3, bath: 3, walk: 5 };
+
+export function level(pet) {
+  let l = 1;
+  while (l < LEVEL_XP.length && pet.xp >= LEVEL_XP[l]) l++;
+  return l;
+}
+
+// Fortschritt innerhalb der Stufe als { have, need } (need = null auf der höchsten Stufe)
+export function levelProgress(pet) {
+  const l = level(pet);
+  if (l >= LEVEL_XP.length) return { have: 0, need: null };
+  return { have: pet.xp - LEVEL_XP[l - 1], need: LEVEL_XP[l] - LEVEL_XP[l - 1] };
+}
+
+export const maxLevel = (state) => state.pets.reduce((m, p) => Math.max(m, level(p)), 0);
 
 export function isUnlocked(speciesId, state) {
   const u = SPECIES[speciesId].unlock;
@@ -106,13 +127,17 @@ export function unlockText(speciesId) {
 }
 
 export function petSlots(state) {
-  return Math.min(MAX_PETS, 1 + SLOT_DAYS.filter((d) => state.visits.total >= d).length);
+  const byLevel = state.pets.some((p) => level(p) >= SLOT_LEVEL) ? 1 : 0;
+  return Math.min(MAX_PETS, 1 + byLevel + (state.extraSlots || 0));
 }
 
-// Besuchstage bis zum nächsten Tierplatz, oder null
-export function nextSlotIn(state) {
-  const next = SLOT_DAYS.find((d) => state.visits.total < d);
-  return next === undefined || petSlots(state) >= MAX_PETS ? null : next - state.visits.total;
+// Hinweis, wie man den nächsten Platz bekommt, oder null
+export function nextSlotHint(state) {
+  if (petSlots(state) >= MAX_PETS) return null;
+  const hints = [];
+  if (!state.pets.some((p) => level(p) >= SLOT_LEVEL)) hints.push(`Bring ein Tier auf Zuneigungsstufe ${SLOT_LEVEL}`);
+  if (!state.extraSlots) hints.push(`kaufe einen Tierplatz im Shop`);
+  return hints.join(' oder ') + '.';
 }
 
 let idCounter = 0;
@@ -123,7 +148,7 @@ export function newPet(speciesId, colorId, name, now = Date.now()) {
     id: `p${now.toString(36)}${(idCounter++).toString(36)}`,
     species: speciesId, color, name: cleanName(name) || sp.names[0], adoptedAt: now,
     stats: { love: 30, fun: 60, food: 60, water: 60, rest: 80, joy: 40 },
-    sleeping: false, tickAt: now, fatigue: {},
+    sleeping: false, tickAt: now, fatigue: {}, xp: 0, cooldowns: {}, acc: {},
   };
 }
 
@@ -135,26 +160,32 @@ export function cleanName(name) {
 // Absinken pro Stunde, wach und schlafend. Ruhe steigt im Schlaf.
 const RATE_AWAKE = { food: 3.5, water: 4.5, fun: 3, rest: 2, love: 0.5 };
 const RATE_ASLEEP = { food: 1.5, water: 2, fun: 0.5, rest: -30, love: 0.2 };
+export const FLOOR = 10;      // durch Zeit allein sinkt kein Wert unter 10
 const JOY_PULL = 0.08;        // Erfüllung nähert sich pro Stunde um 8 % dem Durchschnitt der anderen Werte
 const FATIGUE_RECOVER = 4;    // so viele "Wiederholungen" baut ein Tier pro Stunde wieder ab
 const STEP_MS = 10 * 60 * 1000;
 
 const clamp = (v) => Math.max(0, Math.min(100, v));
 
-function step(pet, hours, sp) {
+function step(pet, hours, sp, opts) {
   const s = pet.stats;
   const rate = pet.sleeping ? RATE_ASLEEP : RATE_AWAKE;
   for (const k of NEEDS) {
     let r = rate[k];
-    if (r > 0) r *= (sp.needs && sp.needs[k]) || 1;
-    // Hungrige oder durstige Tiere fühlen sich schneller vernachlässigt
-    if (k === 'love' && (s.food < 20 || s.water < 20)) r *= 2;
-    s[k] = clamp(s[k] - r * hours);
+    if (r > 0) {
+      r *= (sp.needs && sp.needs[k]) || 1;
+      if (k === 'rest' && opts.bed) r *= 0.8;
+      // Hungrige oder durstige Tiere fühlen sich schneller vernachlässigt
+      if (k === 'love' && (s.food < 20 || s.water < 20)) r *= 2;
+      if (s[k] > FLOOR) s[k] = Math.max(FLOOR, s[k] - r * hours);
+    } else {
+      s[k] = clamp(s[k] - r * hours);
+    }
   }
   const mean = NEEDS.reduce((a, k) => a + s[k], 0) / NEEDS.length;
   s.joy = clamp(s.joy + (mean - s.joy) * Math.min(1, JOY_PULL * hours));
   if (pet.sleeping && s.rest >= 100) pet.sleeping = false;
-  else if (!pet.sleeping && s.rest <= 0) pet.sleeping = true; // schläft vor Erschöpfung von selbst ein
+  else if (!pet.sleeping && s.rest <= FLOOR) pet.sleeping = true; // schläft vor Erschöpfung von selbst ein
   for (const k of Object.keys(pet.fatigue)) {
     pet.fatigue[k] = Math.max(0, pet.fatigue[k] - FATIGUE_RECOVER * hours);
     if (pet.fatigue[k] === 0) delete pet.fatigue[k];
@@ -162,23 +193,27 @@ function step(pet, hours, sp) {
 }
 
 // Bringt ein Tier auf den Stand von "now". Gibt die vergangenen Stunden zurück.
-export function tickPet(pet, now = Date.now()) {
+//   opts.bed: Körbchen vorhanden (Ruhe sinkt langsamer)
+export function tickPet(pet, now = Date.now(), opts = {}) {
   const sp = SPECIES[pet.species];
   const from = pet.tickAt || now;
   if (now <= from) { pet.tickAt = Math.max(from, now); return 0; }
   let t = from;
   while (t < now) {
     const dt = Math.min(STEP_MS, now - t);
-    step(pet, dt / 3600000, sp);
+    step(pet, dt / 3600000, sp, opts);
     t += dt;
   }
   pet.tickAt = now;
   return (now - from) / 3600000;
 }
 
+export const tickOpts = (state) => ({ bed: owned(state, 'care_bed') });
+
 export function tickAll(state, now = Date.now()) {
   let away = 0;
-  for (const p of state.pets) away = Math.max(away, tickPet(p, now));
+  const opts = tickOpts(state);
+  for (const p of state.pets) away = Math.max(away, tickPet(p, now, opts));
   return away;
 }
 
@@ -190,7 +225,7 @@ const NEED_TEXT = {
 
 export function mood(pet) {
   const s = pet.stats;
-  if (pet.sleeping) return { face: 'sleep', key: 'sleep', text: `${pet.name} schläft tief und fest.` };
+  if (pet.sleeping) return { face: 'sleep', key: 'sleep', label: 'schläft', text: `${pet.name} schläft tief und fest.` };
   const lowest = NEEDS.reduce((a, k) => (s[k] < s[a] ? k : a), NEEDS[0]);
   if (s[lowest] < 25) return { face: 'sad', key: lowest, label: NEED_TEXT[lowest][0], text: `${pet.name} ${NEED_TEXT[lowest][1]}.` };
   const avg = (NEEDS.reduce((a, k) => a + s[k], 0) + s.joy) / (NEEDS.length + 1);
@@ -201,63 +236,150 @@ export function mood(pet) {
 
 // ---------- Aktionen ----------
 export const CUDDLE_LOVE = 70;
+export const CUDDLE_LEVEL = 3;
+const H = 3600000;
 
-// effect: Änderungen der Werte; tiring: wiederholt sich die Aktion schnell, wirkt sie schwächer
+// effect: Grundwirkung (bei Futter und Spielzeug kommt die Wirkung des Gegenstands dazu)
+// tiring: wiederholt sich die Aktion schnell, wirkt sie schwächer
+// wait: echte Wartezeit bis zur nächsten Benutzung (wird gespeichert)
+// item: wählt einen Gegenstand aus dem Inventar
 export const ACTIONS = {
   pet: { label: 'Streicheln', icon: '✋', cooldown: 1500, tiring: true, effect: { love: 6, fun: 2, joy: 1 } },
   cuddle: { label: 'Kuscheln', icon: '🤗', cooldown: 4000, tiring: true, effect: { love: 10, rest: 4, joy: 3 } },
-  feed: { label: 'Füttern', icon: '🍖', cooldown: 2000, effect: { food: 35, joy: 1 } },
+  feed: { label: 'Füttern', icon: '🍖', cooldown: 1500, item: 'food', effect: { joy: 1 } },
   water: { label: 'Wasser geben', icon: '💧', cooldown: 2000, effect: { water: 40 } },
-  play: { label: 'Spielen', icon: '🎾', cooldown: 3000, tiring: true, effect: { fun: 25, love: 3, rest: -6, food: -4, water: -5, joy: 2 } },
+  play: { label: 'Spielen', icon: '🎾', cooldown: 3000, tiring: true, item: 'toy', effect: { love: 3, rest: -5, food: -4, water: -4, joy: 2 } },
+  brush: { label: 'Bürsten', icon: '🪮', cooldown: 2000, wait: 2 * H, needs: 'care_brush', effect: { love: 8, joy: 2 } },
+  bath: { label: 'Baden', icon: '🛁', cooldown: 2000, wait: 24 * H, needs: 'care_soap', effect: { joy: 10, love: -3 } },
+  walk: { label: 'Gassi gehen', icon: '🦮', cooldown: 2000, wait: 4 * H, effect: { fun: 20, rest: -10, love: 2, joy: 2 } },
   sleep: { label: 'Schlafen legen', icon: '🛏️', cooldown: 1000, effect: {} },
   wake: { label: 'Aufwecken', icon: '⏰', cooldown: 1000, effect: {} },
 };
 
-// Darf die Aktion gerade ausgeführt werden? { ok, reason }
-export function canDo(pet, action, state) {
-  const s = pet.stats, n = pet.name;
+// Gassi mit Leine (Hund, Fuchs), Ausflug im Laufball (Hamster, Ratte)
+export function walkItem(state, species) {
+  return ['care_leash', 'care_runball'].find((id) => owned(state, id) && usableBy(ITEMS[id], species)) || null;
+}
+export const walkLabel = (species) => (['hamster', 'rat'].includes(species) ? 'Ausflug' : 'Gassi gehen');
+
+// Welche Aktionen das Tier überhaupt anbietet (ohne passende Ausrüstung bleiben Bürsten, Baden und Gassi weg)
+export function availableActions(pet, state) {
+  if (pet.sleeping) return ['wake'];
+  const list = ['pet', 'cuddle', 'feed', 'water', 'play'];
+  if (owned(state, 'care_brush')) list.push('brush');
+  if (owned(state, 'care_soap') || pet.cooldowns.bath > Date.now()) list.push('bath');
+  if (walkItem(state, pet.species)) list.push('walk');
+  list.push('sleep');
+  return list;
+}
+
+// Futter und Spielzeug im Inventar, die dieses Tier benutzen kann (Lieblingssachen zuerst)
+export function usableItems(state, pet, cat) {
+  return Object.keys(state.inventory)
+    .filter((id) => ITEMS[id] && ITEMS[id].cat === cat && state.inventory[id] > 0 && usableBy(ITEMS[id], pet.species))
+    .sort((a, b) => isFav(ITEMS[b], pet.species) - isFav(ITEMS[a], pet.species) || ITEMS[a].price - ITEMS[b].price);
+}
+
+export function waitText(ms) {
+  const m = Math.ceil(ms / 60000);
+  if (m < 60) return `${m} Min`;
+  const h = Math.floor(m / 60), r = m % 60;
+  return r ? `${h} Std ${r} Min` : `${h} Std`;
+}
+
+// Darf die Aktion gerade ausgeführt werden? { ok, reason }. itemId: gewähltes Futter oder Spielzeug
+export function canDo(pet, action, state, itemId = null, now = Date.now()) {
+  const s = pet.stats, n = pet.name, a = ACTIONS[action];
+  if (!a) return { ok: false, reason: '?' };
   if (action === 'wake') return pet.sleeping ? { ok: true } : { ok: false, reason: `${n} ist wach.` };
   if (pet.sleeping) return { ok: false, reason: `${n} schläft gerade. Psst!` };
+  if (a.wait && pet.cooldowns[action] > now) return { ok: false, reason: `${a.label}: wieder möglich in ${waitText(pet.cooldowns[action] - now)}.` };
+  if (a.needs && !owned(state, a.needs)) return { ok: false, reason: `Dafür brauchst du: ${ITEMS[a.needs].name} (im Shop).` };
+  if (a.item) {
+    const items = usableItems(state, pet, a.item);
+    if (!items.length) return { ok: false, reason: a.item === 'food' ? `Du hast kein Futter für ${n}. Schau im Shop vorbei!` : `Du hast kein Spielzeug für ${n}.` };
+    if (itemId && !items.includes(itemId)) return { ok: false, reason: `${n} kann damit nichts anfangen.` };
+  }
   switch (action) {
-    case 'cuddle': return s.love >= CUDDLE_LOVE ? { ok: true } : { ok: false, reason: `${n} vertraut dir noch nicht genug zum Kuscheln. Ab ${CUDDLE_LOVE} Liebe geht es.` };
-    case 'feed': return s.food < 95 ? { ok: true } : { ok: false, reason: `${n} ist satt.` };
+    case 'cuddle':
+      if (level(pet) < CUDDLE_LEVEL) return { ok: false, reason: `Kuscheln geht ab Zuneigungsstufe ${CUDDLE_LEVEL}. ${n} ist auf Stufe ${level(pet)}.` };
+      return s.love >= CUDDLE_LOVE ? { ok: true } : { ok: false, reason: `${n} ist gerade nicht zum Kuscheln aufgelegt. Ab ${CUDDLE_LOVE} Liebe geht es.` };
+    case 'feed': {
+      // Abgelehnt wird nur, wenn alles, was das Futter auffüllt, schon voll ist
+      const eff = itemId ? ITEMS[itemId].effect : { food: 1 };
+      const fills = Object.keys(eff).filter((k) => eff[k] > 0 && k !== 'joy' && k !== 'love');
+      return fills.some((k) => s[k] < 95) ? { ok: true } : { ok: false, reason: `${n} ist satt.` };
+    }
     case 'water': return s.water < 95 ? { ok: true } : { ok: false, reason: `${n} hat keinen Durst.` };
-    case 'play':
-      if (!hasToy(state)) return { ok: false, reason: 'Du hast noch kein Spielzeug.' };
-      return s.rest >= 15 ? { ok: true } : { ok: false, reason: `${n} ist zu müde zum Spielen.` };
+    case 'play': return s.rest >= 15 ? { ok: true } : { ok: false, reason: `${n} ist zu müde zum Spielen.` };
+    case 'walk':
+      if (!walkItem(state, pet.species)) return { ok: false, reason: `Dafür brauchst du eine Leine oder einen Laufball.` };
+      return s.rest >= 20 ? { ok: true } : { ok: false, reason: `${n} ist zu müde für einen Ausflug.` };
     case 'sleep': return s.rest < 80 ? { ok: true } : { ok: false, reason: `${n} ist noch gar nicht müde.` };
-    case 'pet': return { ok: true };
-    default: return { ok: false, reason: '?' };
+    default: return { ok: true };
   }
 }
 
-export function hasToy(state) {
-  return Object.keys(state.inventory || {}).some((k) => k.startsWith('toy_') && state.inventory[k] > 0);
-}
-
-// Führt eine Aktion aus (vorher tickPet aufrufen). Gibt { ok, text, delta } zurück.
-export function doAction(pet, action, state, now = Date.now()) {
-  const check = canDo(pet, action, state);
+// Führt eine Aktion aus (vorher tickPet aufrufen). Gibt { ok, text, delta, factor, xp, levelUp, fav, found } zurück.
+//   itemId: Futter oder Spielzeug (sonst das erste passende)
+//   rng:    Zufall für Fundstücke beim Gassi (für Tests austauschbar)
+export function doAction(pet, action, state, now = Date.now(), { itemId = null, rng = Math.random } = {}) {
+  const check = canDo(pet, action, state, itemId, now);
   if (!check.ok) return { ok: false, text: check.reason, delta: {} };
   const a = ACTIONS[action], sp = SPECIES[pet.species], n = pet.name;
-  const reps = a.tiring ? pet.fatigue[action] || 0 : 0;
+  if (a.item && !itemId) itemId = usableItems(state, pet, a.item)[0];
+  const item = itemId ? ITEMS[itemId] : null;
+  const fav = !!item && isFav(item, pet.species);
+  const fKey = action === 'play' ? 'play:' + itemId : action;   // jedes Spielzeug ermüdet für sich
+  const reps = a.tiring ? pet.fatigue[fKey] || 0 : 0;
   const factor = a.tiring ? Math.max(0.2, 1 - 0.15 * reps) : 1;
+
+  const effect = { ...a.effect };
+  if (item && item.effect) for (const [k, v] of Object.entries(item.effect)) effect[k] = (effect[k] || 0) + (fav && v > 0 ? v * 1.5 : v);
   const delta = {};
-  for (const [k, v] of Object.entries(a.effect)) {
+  for (const [k, v] of Object.entries(effect)) {
     const before = pet.stats[k];
     // Nur das Gute lässt nach, der Aufwand (z. B. Ruhe beim Spielen) bleibt gleich
     pet.stats[k] = clamp(before + (v > 0 ? v * factor : v));
     delta[k] = Math.round(pet.stats[k] - before);
   }
-  if (a.tiring) pet.fatigue[action] = reps + 1;
+  if (a.tiring) pet.fatigue[fKey] = reps + 1;
+  if (a.wait) pet.cooldowns[action] = now + a.wait;
+  if (item && (item.cat === 'food' || item.consumable)) state.inventory[itemId] -= 1;
+  if (a.needs && ITEMS[a.needs].consumable) state.inventory[a.needs] -= 1;
+  for (const k of Object.keys(state.inventory)) if (state.inventory[k] <= 0) delete state.inventory[k];
   pet.tickAt = now;
-  let text;
+
+  const before = level(pet);
+  const xp = Math.round((ACTION_XP[action] || 0) * factor);
+  pet.xp += xp;
+  const levelUp = level(pet) > before ? level(pet) : null;
+
+  let text, found = null;
+  const it = item ? item.name : '';
   switch (action) {
     case 'pet': text = factor < 0.5 ? `${n} hat erstmal genug gestreichelt.` : `${n} ${sp.sound}.`; break;
     case 'cuddle': text = factor < 0.5 ? `${n} möchte gerade lieber etwas Abstand.` : `${n} kuschelt sich ganz fest an dich.`; break;
-    case 'feed': text = `${n} frisst genüsslich.`; break;
+    case 'feed': text = fav ? `${it}! ${n} liebt das über alles.` : `${n} frisst genüsslich: ${it}.`; break;
     case 'water': text = `${n} trinkt ein paar Schlucke.`; break;
-    case 'play': text = factor < 0.5 ? `${n} spielt nur noch halbherzig mit.` : `${n} jagt begeistert dem Ball hinterher!`; break;
+    case 'play':
+      text = factor < 0.5 ? `${n} hat vom ${it} erstmal genug. Wie wär's mit etwas anderem?`
+        : fav ? `${it}! ${n} ist ganz aus dem Häuschen.` : `${n} spielt begeistert: ${it}.`;
+      break;
+    case 'brush': text = `${n} glänzt jetzt richtig schön.`; break;
+    case 'bath': text = `${n} ist blitzsauber, aber ein bisschen beleidigt.`; break;
+    case 'walk': {
+      const r = rng();
+      if (r < 0.3) found = { coins: 5 + Math.floor(rng() * 11) };
+      else if (r < 0.5) {
+        const foods = Object.values(ITEMS).filter((x) => x.cat === 'food' && !x.req && usableBy(x, pet.species));
+        found = { item: foods[Math.floor(rng() * foods.length)].id };
+      }
+      const where = walkLabel(pet.species) === 'Ausflug' ? 'vom Ausflug' : 'vom Spaziergang';
+      text = found ? `${n} kommt ${where} zurück und hat etwas gefunden!` : `${n} kommt glücklich ${where} zurück.`;
+      if (found && found.item) state.inventory[found.item] = (state.inventory[found.item] || 0) + 1;
+      break;
+    }
     case 'sleep': pet.sleeping = true; text = `${n} rollt sich ein und schläft ein. Gute Nacht!`; break;
     case 'wake': {
       pet.sleeping = false;
@@ -266,13 +388,18 @@ export function doAction(pet, action, state, now = Date.now()) {
       break;
     }
   }
-  return { ok: true, text, delta, factor };
+  return { ok: true, text, delta, factor, xp, levelUp, fav, found, itemId };
 }
 
-// Startausstattung, damit "Spielen" von Anfang an geht
+// Startausstattung: ein Ball und 5 × Trockenfutter
 export function starterInventory(state) {
   state.inventory = state.inventory || {};
-  if (!state.inventory.toy_ball) state.inventory.toy_ball = 1;
+  if (!state.starterGiven) {
+    state.inventory.toy_ball = 1;
+    state.inventory.food_dry = (state.inventory.food_dry || 0) + 5;
+    state.inventory.room_living = 1;
+    state.starterGiven = true;
+  }
 }
 
 export function adopt(state, speciesId, colorId, name, now = Date.now()) {
