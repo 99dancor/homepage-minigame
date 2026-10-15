@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mein Haustier</title>
+<link rel="stylesheet" href="css/game.css">
+<!-- Farben aus Admin > Design der Homepage; fehlt die Datei (lokal), gelten die Standardfarben -->
+<link rel="stylesheet" href="/theme.css">
+</head>
+<body>
+<div class="window game" id="game">
+  <div class="titlebar"><span class="icon">🐾</span><span class="ttl">Mein Haustier</span></div>
+  <div class="menubar">
+    <button type="button" class="menu" data-open="help">Hilfe</button>
+    <button type="button" class="menu" data-open="settings">Einstellungen</button>
+    <span class="spacer"></span>
+    <span class="coins" title="Münzen">🪙 <b id="coins">0</b></span>
+  </div>
+
+  <div class="notice" id="guest-notice" hidden>
+    <span class="notice-icon" aria-hidden="true">⚠️</span>
+    <div class="notice-text">
+      <b>Du spielst als Gast.</b> Dein Spielstand liegt nur in diesem Browser und kann verloren gehen,
+      z.&nbsp;B. beim Löschen der Browserdaten. Mit einem kostenlosen Konto ist er dauerhaft gesichert
+      und auf allen deinen Geräten verfügbar.
+      <div class="notice-actions">
+        <a class="btn" id="register-link" href="/register" target="_top">Konto erstellen</a>
+        <a class="btn" id="login-link" href="/login" target="_top">Anmelden</a>
+        <button type="button" class="small" id="notice-later">Später</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="body" id="screen" aria-live="polite">
+    <p class="loading">Lade Spielstand …</p>
+  </main>
+
+  <div class="statusbar">
+    <span id="save-status">…</span>
+    <span id="account-status" class="fixed">…</span>
+  </div>
+</div>
+
+<dialog id="dlg" class="window">
+  <div class="titlebar"><span class="ttl" id="dlg-title"></span></div>
+  <form method="dialog" class="body">
+    <div id="dlg-body"></div>
+    <div class="dlg-actions" id="dlg-actions"></div>
+  </form>
+</dialog>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

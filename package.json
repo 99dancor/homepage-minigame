@@ -1,0 +1,15 @@
+{
+  "name": "homepage-minigame",
+  "version": "0.1.0",
+  "description": "Haustier-Browserspiel für die Retro-Homepage",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "node dev/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
