@@ -10,7 +10,7 @@ import { ITEMS, ITEM_LIST, CATEGORIES, usableBy, isFav, isDurable } from './item
 import {
   ensureDaily, track, taskProgress, TASK_INFO, actionCoins, addCoins, loginBonus, streakMilestones, levelReward,
   accountBonus, available, relevant, dealOfDay, priceOf, canBuy, buy, wear, setRoom, LOGIN_BONUS, DAILY_CAP, ACCOUNT_BONUS,
-  CHECKIN_QUESTIONS, CHECKIN_YES, CHECKIN_NO, CHECKIN_JOY, checkIn, checkinDone,
+  CHECKIN_QUESTIONS, checkIn, checkinDone,
 } from './economy.js';
 import { petSvg, roomSvg } from './art.js';
 
@@ -144,7 +144,7 @@ function roomHtml() {
   const sp = SPECIES[pet.species];
   const say = bubble && bubble.until > Date.now() ? bubble.text : m.text;
   const lp = levelProgress(pet);
-  const ask = checkinDone(state) ? '' : `<div class="checkin-banner"><span>💬 <b>Wie war dein Tag?</b> Drei kurze Fragen, bis zu ${3 * CHECKIN_YES} Münzen und Erfüllung für ${esc(pet.name)}.</span>
+  const ask = checkinDone(state) ? '' : `<div class="checkin-banner"><span>💬 <b>Wie war dein Tag?</b> ${esc(pet.name)} möchte wissen, wie es dir geht. Drei kurze Fragen über dich.</span>
       <button type="button" class="small" data-checkin>Fragen beantworten</button></div>`;
   return `${petTabs()}${ask}
     <div class="room-layout">
@@ -410,8 +410,7 @@ async function runCheckin() {
   const pet = activePet(state);
   const answers = [];
   for (const [i, q] of CHECKIN_QUESTIONS.entries()) {
-    const r = await dialog(`Wie war dein Tag? (${i + 1}/3)`, `<p class="question">${q.text}</p>
-      <p><small>Ja bringt ${CHECKIN_YES} Münzen und ${CHECKIN_JOY} Erfüllung für deine Tiere, Nein ${CHECKIN_NO} Münzen. Ehrlich antworten lohnt sich immer.</small></p>`,
+    const r = await dialog(`Wie war dein Tag? (${i + 1}/3)`, `<p class="question">${q.text}</p>`,
       [{ label: 'Ja', value: 'yes' }, { label: 'Nein', value: 'no' }, { label: 'Später', value: 'later' }]);
     if (r === 'later') return;
     answers.push(r === 'yes');
@@ -426,11 +425,7 @@ async function runCheckin() {
   if (!feelsBad) { ok('Danke!', html); return; }
   html += `<p>Schön, dass du ehrlich bist. Wenn du magst, schreib darüber im <b>Forum</b>. Dort lesen andere mit, die dir zuhören
     und vielleicht Ähnliches kennen.</p>
-    <p><a class="btn" href="${esc(config.forumUrl)}" target="_top">✍️ Beitrag im Forum schreiben</a></p>
-    <p><small>Wenn es dir richtig schlecht geht, musst du da nicht allein durch: Die <b>TelefonSeelsorge</b> ist rund um die Uhr
-    kostenlos und anonym erreichbar unter <b>0800 111 0 111</b> oder <b>0800 111 0 222</b> und auf
-    <a href="https://online.telefonseelsorge.de" target="_blank" rel="noopener">online.telefonseelsorge.de</a>.
-    In einem Notfall wähle <b>112</b>.</small></p>`;
+    <p><a class="btn" href="${esc(config.forumUrl)}" target="_top">✍️ Beitrag im Forum schreiben</a></p>`;
   ok('Danke, dass du es sagst', html);
 }
 

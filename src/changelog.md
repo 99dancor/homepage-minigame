@@ -2,8 +2,8 @@
 
 ## 15.10.2026 – Wie war dein Tag?
 
-- **Drei Fragen zu deinem Tag:** Einmal am Tag fragt das Spiel, ob du den Tag überlebt hast, ob du etwas Gutes für dich getan hast und ob es dir gut geht. Jedes Ja bringt 10 Münzen und Erfüllung für deine Tiere, jedes Nein 8 Münzen. Gespeichert wird nur, dass du geantwortet hast, nicht was.
-- Geht es dir nicht gut, schlägt das Spiel vor, darüber im Forum zu schreiben, und nennt Stellen, die rund um die Uhr zuhören.
+- **Drei Fragen zu deinem Tag:** Einmal am Tag möchte dein Tier wissen, ob du den Tag überlebt hast, ob du etwas Gutes für dich getan hast und ob es dir gut geht. Fürs Antworten gibt es Münzen und deine Tiere freuen sich. Gespeichert wird nur, dass du geantwortet hast, nicht was.
+- Geht es dir nicht gut, schlägt das Spiel vor, darüber im Forum zu schreiben.
 - **Neuigkeiten:** Diese Liste, zu finden oben über 📜. Ein roter Punkt zeigt, wenn etwas Neues dazugekommen ist.
 
 ## 15.10.2026 – Münzen, Shop und Inventar

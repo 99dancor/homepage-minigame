@@ -38,8 +38,9 @@ Grundlage ist das Konzept in der Projektablage (`haustier/konzept.md`), als „M
 
 Einmal am Tag drei Ja/Nein-Fragen zum eigenen Wohlbefinden: „Hast du den Tag heute überlebt?“, „Hast du etwas
 Gutes für dich getan?“, „Geht es dir gut?“. Ja bringt 10 Münzen und 5 Erfüllung für alle Tiere, Nein 8 Münzen.
-Bei „Geht es dir gut? – Nein“ schlägt das Spiel einen Forumsbeitrag vor (`forumUrl`, Standard `/forum/new`) und
-nennt die TelefonSeelsorge. Gespeichert wird nur der Tag der Antwort, nicht die Antworten.
+Vor dem Antworten nennt das Spiel die Belohnungen bewusst nicht, damit niemand nur wegen der Münzen „Ja“ sagt.
+Bei „Geht es dir gut? – Nein“ schlägt das Spiel einen Forumsbeitrag vor (`forumUrl`, Standard `/forum/new`).
+Gespeichert wird nur der Tag der Antwort, nicht die Antworten.
 
 ## Changelog
 
